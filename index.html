@@ -800,7 +800,9 @@ function renderPending() {
     // Approve -> requires PIN
     card.querySelector(".btn-approve-ids").onclick = (ev) => {
       ev.stopPropagation();
-      openPinModal(() => updateStatus(entry.fileId, "approved"));
+      openPinModal(async (pin) => {
+        await idsApprove(entry.fileId, pin);
+      });
     };
 
     // Disapprove -> requires reason + PIN
