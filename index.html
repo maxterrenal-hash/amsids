@@ -758,7 +758,6 @@
       if (!d) return false;
       if (d.drugType !== "Restricted") return false;
       if (d.status !== "for_ids_approval") return false;
-      if (date && d.reqDate !== date) return false;
       if (idsFilter && d.idSpecialist !== idsFilter) return false;
       return true;
     });
