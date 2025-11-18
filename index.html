@@ -779,7 +779,7 @@
           <span class="pill pill-restricted">Restricted</span>
         </div>
         <div class="card-body-line"><strong>Ward:</strong> ${d.ward || ""}</div>
-        <div class="card-body-line"><strong>Indication:</strong> ${d.indication || ""}</div>
+        <div class="card-body-line"><strong>Drug:</strong> ${d.antimicrobial || ""}</div>
         <div class="card-body-line">
           <span class="pill pill-ids">${d.idSpecialist || "No IDS Assigned"}</span>
         </div>
@@ -791,6 +791,7 @@
           <button class="btn btn-reject btn-reject-ids">Disapprove</button>
         </div>
       `;
+
 
       // Clicking on blank area opens details
       card.addEventListener("click", (ev) => {
