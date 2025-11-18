@@ -512,7 +512,6 @@
   function setDefaultDates() {
     const today = new Date().toISOString().split("T")[0];
     const ids = [
-      "pendingDate",
       "approvedRestrictedDate",
       "rejectedRestrictedDate",
       "approvedMonitoredDate",
@@ -657,81 +656,55 @@
       reason = other;
     }
     pendingRejectReason = reason;
-    // After choosing reason, ask for PIN
     document.getElementById("reasonBackdrop").style.display = "none";
 
     openPinModal(async (pin) => {
-      await fetch(API, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "idsUpdateStatus",
-          fileId: entry.fileId,
-          status: "approved",
-          pin
-        })
-      });
-      loadData();
+      await updateStatus(pendingRejectFileId, "disapproved", pendingRejectReason, pin);
+      pendingRejectFileId = null;
+      pendingRejectReason = null;
     });
+  };
 
+    // ==============================
+  // IDS ACTION HELPERS (API CALLS)
   // ==============================
-  // IDS ACTIONS (API CALLS)
-  // ==============================
-  async function idsApprove(fileId, pin) {
+  async function updateStatus(fileId, status, reason, pin) {
     try {
       showLoading();
+      const body = {
+        action: "idsUpdateStatus",
+        fileId,
+        status,
+        pin
+      };
+      if (status === "disapproved" && reason) {
+        body.reason = reason;
+      }
+
       const res = await fetch(API, {
         method: "POST",
-        body: JSON.stringify({
-          action: "idsApprove",
-          fileId,
-          pin
-        })
+        body: JSON.stringify(body)
       });
       const json = await res.json().catch(() => ({}));
       if (!json.ok) {
-        alert(json.error || "IDS approve failed.");
+        alert(json.error || "Update failed.");
       }
       await loadData();
     } catch (err) {
-      console.error("idsApprove error:", err);
-      alert("Error approving request.");
+      console.error("updateStatus error:", err);
+      alert("Error updating request.");
     } finally {
       hideLoading();
     }
   }
 
-  async function idsDisapprove(fileId, reason, pin) {
+  async function deleteEntry(fileId, pin) {
     try {
       showLoading();
       const res = await fetch(API, {
         method: "POST",
         body: JSON.stringify({
-          action: "idsDisapprove",
-          fileId,
-          reason,
-          pin
-        })
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!json.ok) {
-        alert(json.error || "IDS disapprove failed.");
-      }
-      await loadData();
-    } catch (err) {
-      console.error("idsDisapprove error:", err);
-      alert("Error disapproving request.");
-    } finally {
-      hideLoading();
-    }
-  }
-
-  async function idsDelete(fileId, pin) {
-    try {
-      showLoading();
-      const res = await fetch(API, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "idsDelete",
+          action: "idsDeleteEntry",
           fileId,
           pin
         })
@@ -742,7 +715,7 @@
       }
       await loadData();
     } catch (err) {
-      console.error("idsDelete error:", err);
+      console.error("idsDeleteEntry error:", err);
       alert("Error deleting entry.");
     } finally {
       hideLoading();
@@ -752,88 +725,82 @@
   // ==============================
   // RENDER HELPERS
   // ==============================
-function renderPending() {
-  const idsFilter = document.getElementById("pendingIdsFilter").value.trim();
-  const container = document.getElementById("pendingList");
-  container.innerHTML = "";
+  function renderPending() {
+    const idsFilter = document.getElementById("pendingIdsFilter").value.trim();
+    const container = document.getElementById("pendingList");
+    container.innerHTML = "";
 
-  const filtered = ALL_DATA.filter((e) => {
-    const d = e.data;
-    if (!d) return false;
+    const filtered = ALL_DATA.filter((e) => {
+      const d = e.data;
+      if (!d) return false;
 
-    // Only restricted entries
-    if (d.drugType !== "Restricted") return false;
+      // Only restricted entries
+      if (d.drugType !== "Restricted") return false;
 
-    // Only entries waiting for IDS
-    if (d.status !== "for_ids_approval") return false;
+      // Only entries waiting for IDS
+      if (d.status !== "for_ids_approval") return false;
 
-    // Filter by IDS name (if selected)
-    if (idsFilter && d.idSpecialist !== idsFilter) return false;
+      // Filter by IDS name (if selected)
+      if (idsFilter && d.idSpecialist !== idsFilter) return false;
 
-    return true;
-  });
+      return true;
+    });
 
-  filtered.forEach((entry) => {
-    const d = entry.data;
+    if (!filtered.length) {
+      container.innerHTML = `
+        <div class="card" style="cursor:default;">
+          <div class="card-body-line" style="color:var(--text-muted);">No pending restricted entries.</div>
+        </div>`;
+      return;
+    }
 
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <div class="card-header">
-        <div class="card-title">${d.patientName || "Unnamed Patient"}</div>
-        <span class="pill pill-restricted">Restricted</span>
-      </div>
+    filtered.forEach((entry) => {
+      const d = entry.data;
 
-      <div class="card-body-line"><strong>Drug:</strong> ${d.antimicrobial || ""}</div>
-      <div class="card-body-line"><strong>Ward:</strong> ${d.ward || ""}</div>
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="card-title">${d.patientName || "Unnamed Patient"}</div>
+          <span class="pill pill-restricted">Restricted</span>
+        </div>
 
-      <div class="card-body-line">
-        <span class="pill pill-ids">${d.idSpecialist || "No IDS Assigned"}</span>
-      </div>
+        <div class="card-body-line"><strong>Drug:</strong> ${d.antimicrobial || ""}</div>
+        <div class="card-body-line"><strong>Ward:</strong> ${d.ward || ""}</div>
 
-      <div class="actions">
-        <button class="btn btn-approve btn-approve-ids">Approve</button>
-        <button class="btn btn-reject btn-reject-ids">Disapprove</button>
-      </div>
-    `;
+        <div class="card-body-line">
+          <span class="pill pill-ids">${d.idSpecialist || "No IDS Assigned"}</span>
+        </div>
 
-    // Clicking the card opens full details
-    card.onclick = (ev) => {
-      if (ev.target.closest("button")) return;
-      openDetails(entry);
-    };
+        <div class="actions">
+          <button class="btn btn-approve btn-approve-ids">Approve</button>
+          <button class="btn btn-reject btn-reject-ids">Disapprove</button>
+        </div>
+      `;
 
-    // Approve -> requires PIN
-    card.querySelector(".btn-approve-ids").onclick = (ev) => {
-      ev.stopPropagation();
-      openPinModal(async (pin) => {
-await fetch(API, {
-  method: "POST",
-  body: JSON.stringify({
-    action: "idsUpdateStatus",
-    fileId: entry.fileId,
-    status: "disapproved",
-    reason,
-    pin
-  })
-});
-loadData();
-      });
-    };
+      // Clicking the card opens full details
+      card.onclick = (ev) => {
+        if (ev.target.closest("button")) return;
+        openDetails(entry);
+      };
 
-    // Disapprove -> requires reason + PIN
-    card.querySelector(".btn-reject-ids").onclick = (ev) => {
-      ev.stopPropagation();
-      currentRejectFileId = entry.fileId;
-      openPinModal(() => {
-        document.getElementById("reasonBackdrop").style.display = "flex";
-      });
-    };
+      // Approve -> PIN → idsUpdateStatus(..., "approved")
+      card.querySelector(".btn-approve-ids").onclick = (ev) => {
+        ev.stopPropagation();
+        openPinModal(async (pin) => {
+          await updateStatus(entry.fileId, "approved", null, pin);
+        });
+      };
 
-    container.appendChild(card);
-  });
-}
+      // Disapprove -> Reason → PIN → idsUpdateStatus(..., "disapproved")
+      card.querySelector(".btn-reject-ids").onclick = (ev) => {
+        ev.stopPropagation();
+        openReasonModal(entry.fileId);
+      };
 
+      container.appendChild(card);
+    });
+  }
 
   function renderRestrictedList({ listId, dateId, idsFilterId, status, allowApprove, allowDelete }) {
     const container = document.getElementById(listId);
@@ -890,6 +857,7 @@ loadData();
       btnBar.style.gap = "0.35rem";
       btnBar.style.marginTop = "0.45rem";
 
+      // From Rejected → Approve (back to approved)
       if (allowApprove) {
         const approveBtn = document.createElement("button");
         approveBtn.className = "btn btn-approve";
@@ -898,14 +866,14 @@ loadData();
           ev.stopPropagation();
           openDetails(entry);
           openPinModal(async (pin) => {
-            await idsApprove(entry.fileId, pin);
+            await updateStatus(entry.fileId, "approved", null, pin);
           });
         };
         btnBar.appendChild(approveBtn);
       }
 
+      // From Approved → Disapprove
       if (status === "approved") {
-        // allow moving back to rejected
         const disBtn = document.createElement("button");
         disBtn.className = "btn btn-reject";
         disBtn.textContent = "Disapprove";
@@ -925,15 +893,7 @@ loadData();
           ev.stopPropagation();
           if (!confirm("Delete this IDS record?")) return;
           openPinModal(async (pin) => {
-      await fetch(API, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "idsDeleteEntry",
-          fileId: entry.fileId,
-          pin
-        })
-      });
-      loadData();
+            await deleteEntry(entry.fileId, pin);
           });
         };
         btnBar.appendChild(delBtn);
@@ -1067,7 +1027,7 @@ loadData();
   // FILTER CHANGE → RE-RENDER
   // ==============================
   [
-    "pendingDate", "pendingIdsFilter",
+    "pendingIdsFilter",
     "approvedRestrictedDate", "approvedRestrictedIdsFilter",
     "rejectedRestrictedDate", "rejectedRestrictedIdsFilter",
     "approvedMonitoredDate", "approvedMonitoredPharm",
