@@ -746,95 +746,76 @@
   // ==============================
   // RENDER HELPERS
   // ==============================
-  function renderPending() {
-    const container = document.getElementById("pendingList");
-    container.innerHTML = "";
+function renderPending() {
+  const idsFilter = document.getElementById("pendingIdsFilter").value.trim();
+  const container = document.getElementById("pendingList");
+  container.innerHTML = "";
 
-    const date = document.getElementById("pendingDate").value;
-    const idsFilter = document.getElementById("pendingIdsFilter").value;
+  const filtered = ALL_DATA.filter((e) => {
+    const d = e.data;
+    if (!d) return false;
 
-    const filtered = ALL_DATA.filter(e => {
-      const d = e.data;
-      if (!d) return false;
-      if (d.drugType !== "Restricted") return false;
-      if (d.status !== "for_ids_approval") return false;
-      if (idsFilter && d.idSpecialist !== idsFilter) return false;
-      return true;
-    });
+    // Only restricted entries
+    if (d.drugType !== "Restricted") return false;
 
-    if (!filtered.length) {
-      container.innerHTML = `<p style="font-size:0.85rem; color:var(--text-muted);">No pending restricted requests for this filter.</p>`;
-      return;
-    }
+    // Only entries waiting for IDS
+    if (d.status !== "for_ids_approval") return false;
 
-    filtered.forEach(entry => {
-      const d = entry.data;
-      const card = document.createElement("div");
-      card.className = "card";
+    // Filter by IDS name (if selected)
+    if (idsFilter && d.idSpecialist !== idsFilter) return false;
 
+    return true;
+  });
+
+  filtered.forEach((entry) => {
+    const d = entry.data;
+
+    const card = document.createElement("div");
+    card.className = "card";
     card.innerHTML = `
       <div class="card-header">
         <div class="card-title">${d.patientName || "Unnamed Patient"}</div>
         <span class="pill pill-restricted">Restricted</span>
       </div>
-    
-      <!-- DRUG AS THE MAIN ENTRY -->
-      <div class="card-body-line" style="font-weight:700; font-size:1rem; margin-bottom:2px;">
-        ${d.antimicrobial || ""}
-      </div>
-    
-      <!-- OPTIONAL DOSE/FREQ LINE: CLEANER LOOK -->
-      <div class="card-body-line" style="color:#444; margin-bottom:4px;">
-        ${d.dose || ""} ${d.frequency ? "— " + d.frequency : ""}
-      </div>
-    
-      <div class="card-body-line">
-        <strong>Ward:</strong> ${d.ward || ""}
-      </div>
-    
+
+      <div class="card-body-line"><strong>Drug:</strong> ${d.antimicrobial || ""}</div>
+      <div class="card-body-line"><strong>Ward:</strong> ${d.ward || ""}</div>
+
       <div class="card-body-line">
         <span class="pill pill-ids">${d.idSpecialist || "No IDS Assigned"}</span>
       </div>
-    
-      <div class="card-body-line" style="color:var(--text-muted); font-size:0.8rem;">
-        <strong>Date:</strong> ${d.reqDate || ""}
-      </div>
-    
+
       <div class="actions">
         <button class="btn btn-approve btn-approve-ids">Approve</button>
         <button class="btn btn-reject btn-reject-ids">Disapprove</button>
       </div>
     `;
 
+    // Clicking the card opens full details
+    card.onclick = (ev) => {
+      if (ev.target.closest("button")) return;
+      openDetails(entry);
+    };
 
-      // Clicking on blank area opens details
-      card.addEventListener("click", (ev) => {
-        if (ev.target.closest("button")) return;
-        openDetails(entry);
+    // Approve -> requires PIN
+    card.querySelector(".btn-approve-ids").onclick = (ev) => {
+      ev.stopPropagation();
+      openPinModal(() => updateStatus(entry.fileId, "approved"));
+    };
+
+    // Disapprove -> requires reason + PIN
+    card.querySelector(".btn-reject-ids").onclick = (ev) => {
+      ev.stopPropagation();
+      currentRejectFileId = entry.fileId;
+      openPinModal(() => {
+        document.getElementById("reasonBackdrop").style.display = "flex";
       });
+    };
 
-      // Approve
-      const approveBtn = card.querySelector(".btn-approve-ids");
-      approveBtn.onclick = (ev) => {
-        ev.stopPropagation();
-        // Show details first (per your choice B)
-        openDetails(entry);
-        openPinModal(async (pin) => {
-          await idsApprove(entry.fileId, pin);
-        });
-      };
+    container.appendChild(card);
+  });
+}
 
-      // Disapprove
-      const rejectBtn = card.querySelector(".btn-reject-ids");
-      rejectBtn.onclick = (ev) => {
-        ev.stopPropagation();
-        openDetails(entry);
-        openReasonModal(entry.fileId);
-      };
-
-      container.appendChild(card);
-    });
-  }
 
   function renderRestrictedList({ listId, dateId, idsFilterId, status, allowApprove, allowDelete }) {
     const container = document.getElementById(listId);
