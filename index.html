@@ -661,11 +661,17 @@
     document.getElementById("reasonBackdrop").style.display = "none";
 
     openPinModal(async (pin) => {
-      await idsDisapprove(pendingRejectFileId, reason, pin);
-      pendingRejectFileId = null;
-      pendingRejectReason = null;
+      await fetch(API, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "idsUpdateStatus",
+          fileId: entry.fileId,
+          status: "approved",
+          pin
+        })
+      });
+      loadData();
     });
-  };
 
   // ==============================
   // IDS ACTIONS (API CALLS)
@@ -801,7 +807,17 @@ function renderPending() {
     card.querySelector(".btn-approve-ids").onclick = (ev) => {
       ev.stopPropagation();
       openPinModal(async (pin) => {
-        await idsApprove(entry.fileId, pin);
+await fetch(API, {
+  method: "POST",
+  body: JSON.stringify({
+    action: "idsUpdateStatus",
+    fileId: entry.fileId,
+    status: "disapproved",
+    reason,
+    pin
+  })
+});
+loadData();
       });
     };
 
@@ -909,7 +925,15 @@ function renderPending() {
           ev.stopPropagation();
           if (!confirm("Delete this IDS record?")) return;
           openPinModal(async (pin) => {
-            await idsDelete(entry.fileId, pin);
+      await fetch(API, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "idsDeleteEntry",
+          fileId: entry.fileId,
+          pin
+        })
+      });
+      loadData();
           });
         };
         btnBar.appendChild(delBtn);
